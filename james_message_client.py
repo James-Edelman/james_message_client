@@ -3,7 +3,7 @@ import asyncio
 
 # sets the top buffer and title
 print("\033]1;James' message client\007\x1b[4;r", end = "", flush = True)
-print("-------- check for updates on ")
+print("-------- check for updates on https://github.com/James-Edelman/James-message-client/")
 print("❭")
 print("--------")
 
@@ -121,7 +121,6 @@ async def check_connection():
             print("\x1b8 === connection lost ===")
             shutdown()
             return
-
 
 async def main():
     if U_TYPE == "host":
