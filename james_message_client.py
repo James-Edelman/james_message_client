@@ -14,6 +14,7 @@ while not U_TYPE in ['join', 'host']:
     # moves back to the previous line and clears, before asking again
     U_TYPE = input("\x1b[1F\x1b[2K'join' or 'host': ")
 
+# gets desired port
 if U_TYPE == "host":
     while True:
         MY_PORT = input("choose port (if unsure, '69420', or '80' as backup): ")
