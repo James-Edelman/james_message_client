@@ -3,7 +3,7 @@ import asyncio
 
 # sets the top buffer and title
 print("\033]1;James' message client\007\x1b[4;r", end = "", flush = True)
-print("-------- check for updates on https://github.com/James-Edelman/James-message-client/")
+print("https://github.com/James-Edelman/James-message-client/")
 print("❭")
 print("--------")
 
@@ -15,24 +15,25 @@ while not U_TYPE in ['join', 'host']:
     U_TYPE = input("\x1b[1F\x1b[2K'join' or 'host': ")
 
 # gets desired port
+# I know that U_TYPE isn't a constant since it's overwritten, but close enough
 if U_TYPE == "host":
     while True:
-        MY_PORT = input("choose port (if unsure, '69420', or '80' as backup): ")
+        U_PORT = input("\x1b[1F\x1b[2Kchoose port: ")
         try:
-            int(MY_PORT)
+            int(U_PORT)
         except ValueError:
             print("\x1b[1F\x1b[2K", end="", flush="")
         else:
-            MY_PORT = int(MY_PORT)
+            U_PORT = int(U_PORT)
             break
 
 U_NAME = socket.gethostname()
 U_IP_V4 = socket.gethostbyname(U_NAME)
-timeout_count = 0
-MAX_TIMEOUT = 3
+last_msg = ""
 
-# creates a new instance of socket, the first arg is saying AddresFrom_Internet,
-# and second arg is saying it is a STREAMing type, using TCP
+clients = []
+
+# creates a new socket using IPV4 and as streaming type
 my_sock_inst = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
 def shutdown():
@@ -44,43 +45,60 @@ def shutdown():
 
 async def check_sent_msg():
     """checks if other user has sent any messages"""
-    global timeout_count
 
-    while True:
-        loop = asyncio.get_running_loop()
+    loop = asyncio.get_running_loop()
 
-        try:
-            if U_TYPE == 'host':
-                msg = await loop.run_in_executor(None, client_sock.recv, 1024)
-            else:
+    if U_TYPE != "host":
+        while True:
+            try:
                 msg = await loop.run_in_executor(None, my_sock_inst.recv, 1024)
-        
-        # if the other socket is not responding,
-        # then the program automatically closes        
-        except ConnectionResetError:
-            print("\x1b8 === connection lost ===")
-            shutdown()
-            return
 
-        # responds to the ping with an acknowledgment 
-        if msg == b"$%ping":
-            if U_TYPE == 'host':
-                client_sock.sendall(b"$%ack")
-            else:
-                my_sock_inst.sendall(b"$%ack")
+            # if the other socket is not responding,
+            # then the program automatically closes  
+            except ConnectionAbortedError:
+                print("\x1b8 === connection lost ===")
+                shutdown()
 
-        # resets the timeout_count to 0
-        elif msg == b"$%ack":
-            timeout_count = 0
-        else:
+            except ConnectionResetError:
+                print("\x1b8 === connection lost ===")
+                shutdown()
+
+            if msg == b"$%name":
+                my_sock_inst.sendall(U_NAME.encode())
+                continue
+
+            # ensures echoed messages aren't printed twice
+            elif msg == last_msg:
+                continue
+
             # restores cursor pos, prints message
             print("\x1b8", str(msg)[2:-1])
 
             # saves cursor pos; moves to top; clears line; adds '❭' symbol
-            print("\x1b7\x1b[2;0H\x1b[2K❭ ", end = "", flush="True")
+            print("\x1b7\x1b[2;0H\x1b[0K❭ ", end = "", flush="True")
+
+    # clients are caught by the first loop
+    while True:
+        for socket_ in clients: 
+            try:
+                msg = socket_.recv(1024)
+            except BlockingIOError:
+                continue
+
+            print("\x1b8", str(msg)[2:-1])
+            print("\x1b7\x1b[2;0H\x1b[0K❭ ", end = "", flush=True)
+
+            # echos the message back to the other clients
+            # there are checks to ensure the sender doesn't receive it
+            for socket__ in clients:
+                socket__.sendall(msg)
+        await asyncio.sleep(0.5)
+       
 
 async def send_new_msg():
     """gets user input and sends message"""
+    global last_msg
+
     while True:
 
         # gets user input
@@ -94,42 +112,36 @@ async def send_new_msg():
 
         # send to other person
         if U_TYPE == 'host':
-            client_sock.sendall(f"{U_NAME}: {msg}".encode())
+            for client_ in clients:
+                client_.sendall(f"{U_NAME}: {msg}".encode())
         else:
             my_sock_inst.sendall(f"{U_NAME}: {msg}".encode())
+            last_msg = f"{U_NAME}: {msg}".encode()
         
         # prints message on sender side
         print(f"\x1b8{U_NAME}: {msg}")
         print("\x1b7\x1b[2;0H\x1b[0K❭ ", end = "", flush="True")
 
-async def check_connection():
-    """pings the other user every three seconds"""
-    global timeout_count
+async def receive_users():
+    """enables multiple people to join 1 host"""
+    if U_TYPE != "host":
+        return
+
+    loop = asyncio.get_running_loop()
 
     while True:
-        await asyncio.sleep(2)
-        if U_TYPE == 'host':
-            client_sock.sendall(b"$%ping")
-        else:
-            my_sock_inst.sendall(b"$%ping")
-
-        timeout_count += 1
-
-        # if there have been 3 pings in a row not acknowledged,
-        # then it is assumed that the other user has quit
-        if timeout_count > MAX_TIMEOUT:
-            print("\x1b8 === connection lost ===")
-            shutdown()
-            return
+        x, y = await loop.run_in_executor(None, my_sock_inst.accept)
+        clients.append(x)
+        clients[-1].setblocking(False)
 
 async def main():
     if U_TYPE == "host":
 
         # binds the socket to a 'location' on my computer
-        my_sock_inst.bind((U_IP_V4, MY_PORT))
+        my_sock_inst.bind((U_IP_V4, U_PORT))
 
         # provides the details for another user to connect with
-        print(f"connection details: {U_IP_V4}-{MY_PORT}")
+        print(f"\x1b[1F\x1b[2Kconnection details: {U_IP_V4}-{U_PORT}")
         print("\x1b7== WAITING FOR CONNECTION ==")
 
         # enables the socket to accept data
@@ -140,12 +152,20 @@ async def main():
 
         # checks for another program to send data to it
         client_sock, CLIENT_PORT = my_sock_inst.accept()
+        clients.append(client_sock)
 
-        # returns to previous line; clears; moves up another line; clears; prints
-        print(f"\x1b8\x1b[2K\x1b[1F\x1b[2Kconnected by {CLIENT_PORT}")
+        # gets client name
+        clients[-1].sendall(b"$%name")
+        name = clients[-1].recv(1024)
+
+        # sets non-blocking AFTER name received
+        clients[-1].setblocking(False)
+      
+        # returns to previous line; clears;
+        print(f"\x1b8\x1b[2K{str(name)[2:-1]} joined")
 
     else:
-        SERVER_IP_V4, SERVER_PORT = input("connection details: ").strip().split("-")
+        SERVER_IP_V4, SERVER_PORT = input("\x1b[1F\x1b[2Kconnection details: ").strip().split("-")
         SERVER_PORT = int(SERVER_PORT)
 
         my_sock_inst.connect((SERVER_IP_V4, SERVER_PORT))
@@ -154,12 +174,13 @@ async def main():
 
     # saves cursor pos; moves to top; clears line; adds '❭' symbol
     print("\x1b7\x1b[2;0H\x1b[2K❭ ", end = "", flush="True")
-    await asyncio.gather(check_sent_msg(), send_new_msg(), check_connection())
+    await asyncio.gather(check_sent_msg(), send_new_msg(), receive_users())
     
     # closes sockets
     my_sock_inst.close()
 
     if U_TYPE == "host":
-        client_sock.close()
+        for client_ in clients:
+            client_.close()
 
 asyncio.run(main())
