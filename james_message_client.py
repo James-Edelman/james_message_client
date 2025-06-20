@@ -165,6 +165,14 @@ async def main():
         print(f"\x1b8\x1b[2K{str(name)[2:-1]} joined")
 
     else:
+
+        # asks if user wants to use port 80 to get around Barker firewall
+        u_input = ''
+        while not u_input in ['yes', 'no']:
+            u_input = input("\x1b[1F\x1b[2Kconnect from port 80? ('yes' or 'no'): ")
+        if u_input == "yes":
+            my_sock_inst.bind((U_IP_V4, 80))
+
         SERVER_IP_V4, SERVER_PORT = input("\x1b[1F\x1b[2Kconnection details: ").strip().split("-")
         SERVER_PORT = int(SERVER_PORT)
 
