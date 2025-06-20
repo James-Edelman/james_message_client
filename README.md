@@ -1,1 +1,1 @@
-# james_message_client
+If you don't know what you're doing, just download the .exe
